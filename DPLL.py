@@ -1,5 +1,6 @@
 import random
 import sys
+import time
 
 solution = {}
 
@@ -32,52 +33,6 @@ def create_clause_mapping(clauses):
     return cell_mapping
 
 
-
-def simplify(pa, clauses):
-    "Apply the tautology, pure literal and unit rules to remove unnecessary entries"
-    # Tautology rule
-    for clause in clauses:
-        for variable in clause:
-            if -variable in clause:
-                clause.remove(variable)
-                # If the tautology is the only left in the clause, just remove one, so the unit clause rule will handle the rest
-                if len(clause) > 1: # else just remove both
-                    clause.remove(-variable)
-
-    # Pure literals
-    pure_literals = set()
-    clause_mapping = create_clause_mapping(clauses)
-    for variable in clause_mapping:
-        if variable*-1 not in clause_mapping: # check if literal is pure
-            pure_literals.add(variable)
-
-    for literal in pure_literals:
-        if literal > 0:
-            pa[abs(literal)] = True
-            clauses = update_clauses(clauses, abs(literal), True)
-        else:
-            pa[abs(literal)] = False
-            clauses = update_clauses(clauses, abs(literal), False)
-
-    # Unit clause rule
-    while True:
-        unit_literals = {next(iter(clause)) for clause in clauses if len(clause) == 1}
-
-        if len(unit_literals) == 0:
-            break
-
-        for literal in unit_literals:
-            if literal > 0:
-                pa[abs(literal)] = True
-                clauses = update_clauses(clauses, abs(literal), True)
-            else:
-                pa[abs(literal)] = False
-                clauses = update_clauses(clauses, abs(literal), False)
-
-
-    return pa, clauses
-
-
 def find_truth(literal, truth_value):
     """
     "From a literal (negated or not), and an assigned truth value,
@@ -108,23 +63,59 @@ def update_clauses(clauses, new_lit, truth_value):
     return updated_clauses
 
 
+def simplify(pa, clauses):
+    "Apply the tautology, pure literal and unit rules to remove unnecessary entries"
+    # Tautology rule
+    for clause in clauses:
+        for variable in clause:
+            if -variable in clause:
+                clause.remove(variable)
+                # If the tautology is the only left in the clause, just remove one, so the unit clause rule will handle the rest
+                if len(clause) > 1: # else just remove both
+                    clause.remove(-variable)
+
+    # Pure literals
+    pure_literals = set()
+    clause_mapping = create_clause_mapping(clauses)
+    for variable in clause_mapping:
+        if variable*-1 not in clause_mapping: # check if literal is pure
+            pure_literals.add(variable)
+
+    for literal in pure_literals:
+        if literal > 0:
+            pa[abs(literal)] = True
+            clauses = update_clauses(clauses, abs(literal), True)
+        else:
+            pa[abs(literal)] = False
+            clauses = update_clauses(clauses, abs(literal), False)
+
+    # Unit clause rule
+    while True:
+        unit_literals = {next(iter(clause)) for clause in clauses if len(clause) == 1}
+        if len(unit_literals) == 0:
+            break
+
+        for literal in unit_literals:
+            if literal > 0:
+                pa[abs(literal)] = True
+                clauses = update_clauses(clauses, abs(literal), True)
+            else:
+                pa[abs(literal)] = False
+                clauses = update_clauses(clauses, abs(literal), False)
+
+
+    return pa, clauses
+
+
 def DPLL(pa, clauses):
     "DPLL is used recursively, making use of backtracking to explore whole search space"
     global solution
 
-    # Check satisfiability
-    if len(clauses) == 0: # Satisfiable (sudoku is done)
-        solution = pa.copy()
-        return True
-    if any(len(clause) == 0 for clause in clauses): # Unsatisfiable
-        return False
-
     # Perform simplification rules
     pa, clauses = simplify(pa, clauses)
 
-    # Check satisfiability again
+    # Check satisfiability
     if len(clauses) == 0: # Satisfiable (sudoku is done)
-
         solution = pa.copy()
         return True
     if any(len(clause) == 0 for clause in clauses): # Unsatisfiable
@@ -153,7 +144,8 @@ def run_DPLL(filename):
         print("Did not find a solution")
         return
 
-    filename = "DPLL.out"
+    filename = filename.split(".")
+    filename = f"{filename[0]}.out"
     with open(filename, "w") as f: # Write the DIMACS output to file
         for literal, value in solution.items():
             dimacs_literal = str(literal) if value else f"-{literal}"
@@ -163,9 +155,11 @@ def run_DPLL(filename):
 
 
 
-
 if len(sys.argv) > 1:
+    start_time = time.time()
     run_DPLL(sys.argv[1])
+    end_time = time.time()
+    print("Runtime:", f"{end_time - start_time}s")
 
     ### Sudoku representation
     max_value = max(abs(literal) for literal in solution.keys())
