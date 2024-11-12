@@ -33,38 +33,72 @@ def create_clause_mapping(clauses):
     return cell_mapping
 
 
-def find_truth(literal, truth_value):
-    """
-    "From a literal (negated or not), and an assigned truth value,
-    find the resulting truth value
-    """
-    return truth_value if literal > 0 else not truth_value
+def simplify(pa, clauses):
+    "Apply the pure literal and unit rules to remove unnecessary entries"
+    # Unit clause rule
+    choices = {next(iter(clause)) for clause in clauses if len(clause) == 1}
+
+    # Pure literals rule
+    clause_mapping = create_clause_mapping(clauses)
+    for variable in clause_mapping:
+        if variable*-1 not in clause_mapping: # check if literal is pure
+            choices.add(variable)
+
+    return choices
 
 
-def update_clauses(clauses, new_lit, truth_value):
+def remove_literal(clauses, assigned_lit):
     updated_clauses = []
-
     for clause in clauses:
-        clause_is_true = False
-        new_clause = set()
-
-        for literal in clause:
-            if abs(literal) == new_lit:
-                if find_truth(literal, truth_value): # If the literal makes the clause true, mark the clause as true
-                    clause_is_true = True
-                    break
-            else:
-                new_clause.add(literal)
-
-        if not clause_is_true: # Only add clauses that are not yet true
+        if assigned_lit in clause:
+            continue
+        elif -assigned_lit in clause:
+            # Remove the negation of the assigned literal from this clause
+            new_clause = set(clause) - {-assigned_lit}
             updated_clauses.append(new_clause)
-
+        else:
+            updated_clauses.append(clause)
 
     return updated_clauses
 
 
-def simplify(pa, clauses):
-    "Apply the tautology, pure literal and unit rules to remove unnecessary entries"
+def DPLL(pa, clauses, assigned_lit):
+    "DPLL is used recursively, making use of backtracking to explore whole search space"
+    global solution
+
+    updated_clauses = remove_literal(clauses, assigned_lit)
+
+    # Check satisfiability
+    if len(updated_clauses) == 0: # Satisfiable (sudoku is done)
+        solution = pa.copy()
+        return True
+    if any(len(clause) == 0 for clause in updated_clauses): # Unsatisfiable
+        return False
+
+    # Perform simplification rules
+    choices = simplify(pa, updated_clauses)
+    if len(choices) > 0:
+        new_literal = list(choices)[0]
+
+        pa[abs(new_literal)] = True if new_literal > 0 else False
+        return DPLL(pa, updated_clauses, new_literal)
+
+    # Select a new literal to recurse/backtrack with
+    available_literals = {abs(lit) for clause in updated_clauses for lit in clause}
+    new_literal = list(available_literals)[0]
+
+    pa[new_literal] = False # For now assign false
+    if (DPLL(pa, updated_clauses, -new_literal)):
+        return True
+
+    pa[new_literal] = True # False didn't work so backtrack for true
+    return DPLL(pa, updated_clauses, new_literal)
+
+
+def run_DPLL(filename):
+    clauses = parse_dimacs(filename)
+
+    start_time = time.time()
     # Tautology rule
     for clause in clauses:
         for variable in clause:
@@ -74,70 +108,20 @@ def simplify(pa, clauses):
                 if len(clause) > 1: # else just remove both
                     clause.remove(-variable)
 
-    # Pure literals
-    pure_literals = set()
-    clause_mapping = create_clause_mapping(clauses)
-    for variable in clause_mapping:
-        if variable*-1 not in clause_mapping: # check if literal is pure
-            pure_literals.add(variable)
-
-    for literal in pure_literals:
-        if literal > 0:
-            pa[abs(literal)] = True
-            clauses = update_clauses(clauses, abs(literal), True)
-        else:
-            pa[abs(literal)] = False
-            clauses = update_clauses(clauses, abs(literal), False)
-
-    # Unit clause rule
-    while True:
-        unit_literals = {next(iter(clause)) for clause in clauses if len(clause) == 1}
-        if len(unit_literals) == 0:
-            break
-
-        for literal in unit_literals:
-            if literal > 0:
-                pa[abs(literal)] = True
-                clauses = update_clauses(clauses, abs(literal), True)
-            else:
-                pa[abs(literal)] = False
-                clauses = update_clauses(clauses, abs(literal), False)
-
-
-    return pa, clauses
-
-
-def DPLL(pa, clauses):
-    "DPLL is used recursively, making use of backtracking to explore whole search space"
-    global solution
-
-    # Perform simplification rules
-    pa, clauses = simplify(pa, clauses)
-
-    # Check satisfiability
-    if len(clauses) == 0: # Satisfiable (sudoku is done)
-        solution = pa.copy()
-        return True
-    if any(len(clause) == 0 for clause in clauses): # Unsatisfiable
-        return False
-
-
-    # Select a new literal randomly to recurse/backtrack with
-    available_literals = {abs(lit) for clause in clauses for lit in clause}
-    new_literal = random.choice(list(available_literals))
-    pa[new_literal] = False # For now assign false
-    if (DPLL(pa, update_clauses(clauses, new_literal, False))):
-        return True
-
-    pa[new_literal] = True # False didn't work so backtrack for true
-    return DPLL(pa, update_clauses(clauses, new_literal, True))
-
-
-def run_DPLL(filename):
-    clauses = parse_dimacs(filename)
-
     pa = {}
-    satisfiability = DPLL(pa, clauses)
+    # Select a new literal to recurse/backtrack with
+    available_literals = list({abs(lit) for clause in clauses for lit in clause})
+    new_literal = list(available_literals)[0]
+
+    pa[new_literal] = False  # Assign False initially
+    satisfiability = DPLL(pa, clauses, -new_literal)
+    if not satisfiability:
+        pa[new_literal] = True
+        satisfiability = DPLL(pa, clauses, new_literal)
+
+    end_time = time.time()
+    print("Runtime:", f"{end_time - start_time}s")
+
     if satisfiability:
         print("Solution found")
     else:
@@ -154,12 +138,8 @@ def run_DPLL(filename):
     return
 
 
-
 if len(sys.argv) > 1:
-    start_time = time.time()
     run_DPLL(sys.argv[1])
-    end_time = time.time()
-    print("Runtime:", f"{end_time - start_time}s")
 
     ### Sudoku representation
     max_value = max(abs(literal) for literal in solution.keys())
