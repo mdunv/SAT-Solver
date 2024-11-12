@@ -1,4 +1,5 @@
 import os
+import sys
 
 
 class SimplifiedSudokuCNFGenerator:
@@ -92,8 +93,7 @@ def process_sudoku_file(filename, rules_filename, output_dir):
 
 
 if __name__ == "__main__":
-    # import sys
-    #
+    # uncomment to select file to parse manually in terminal
     # if len(sys.argv) != 2:
     #     print("Usage: python simplified_sudoku_cnf_generator.py <filename>")
     #     sys.exit(1)
