@@ -36,15 +36,17 @@ def create_clause_mapping(clauses):
 def simplify(pa, clauses):
     "Apply the pure literal and unit rules to remove unnecessary entries"
     # Unit clause rule
-    choices = {next(iter(clause)) for clause in clauses if len(clause) == 1}
+    for clause in clauses:
+        if len(clause) == 1:
+            return next(iter(clause))
 
     # Pure literals rule
     clause_mapping = create_clause_mapping(clauses)
     for variable in clause_mapping:
         if variable*-1 not in clause_mapping: # check if literal is pure
-            choices.add(variable)
+            return variable
 
-    return choices
+    return None
 
 
 def remove_literal(clauses, assigned_lit):
@@ -62,6 +64,13 @@ def remove_literal(clauses, assigned_lit):
     return updated_clauses
 
 
+def pick_new_literal(pa, clauses):
+    for clause in clauses:
+        for literal in clause:
+            return abs(literal)
+    return None
+
+
 def DPLL(pa, clauses, assigned_lit):
     "DPLL is used recursively, making use of backtracking to explore whole search space"
     global solution
@@ -76,16 +85,13 @@ def DPLL(pa, clauses, assigned_lit):
         return False
 
     # Perform simplification rules
-    choices = simplify(pa, updated_clauses)
-    if len(choices) > 0:
-        new_literal = list(choices)[0]
-
-        pa[abs(new_literal)] = True if new_literal > 0 else False
-        return DPLL(pa, updated_clauses, new_literal)
+    unit_literal = simplify(pa, updated_clauses)
+    if unit_literal:
+        pa[abs(unit_literal)] = True if unit_literal > 0 else False
+        return DPLL(pa, updated_clauses, unit_literal)
 
     # Select a new literal to recurse/backtrack with
-    available_literals = {abs(lit) for clause in updated_clauses for lit in clause}
-    new_literal = list(available_literals)[0]
+    new_literal = pick_new_literal(pa, updated_clauses)
 
     pa[new_literal] = False # For now assign false
     if (DPLL(pa, updated_clauses, -new_literal)):
