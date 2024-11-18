@@ -81,7 +81,22 @@ def unit_propogation(pa, clauses, decision_levels, antecedents, conflicts_per_as
     return None
 
 
-def pick_new_literal(pa, clauses):
+def pick_new_literal(pa, clauses, conflicts_per_assignment):
+    # # Find VSIDS
+    # max_activity = -1
+    # best_literal = None
+
+    # for clause in clauses:
+    #     for literal in clause:
+    #         if abs(literal) not in pa:  # Only consider unassigned literals
+    #             conflicts = conflicts_per_assignment.get(abs(literal), 0)
+    #             activity = conflicts[True] + conflicts[False]
+    #             if activity > max_activity:
+    #                 max_activity = activity
+    #                 best_literal = literal
+
+    # return best_literal
+
     for clause in clauses:
         for literal in clause:
             if abs(literal) not in pa:
@@ -89,19 +104,20 @@ def pick_new_literal(pa, clauses):
     return None
 
 
-def pick_truth_value(literal, past_conflicts):
-    true_confs, false_confs = past_conflicts[abs(literal)][True], past_conflicts[abs(literal)][False]
-    total_conflicts = true_confs + false_confs
+# def pick_truth_value(literal, past_conflicts):
+#     true_confs, false_confs = past_conflicts[abs(literal)][True], past_conflicts[abs(literal)][False]
+#     total_conflicts = true_confs + false_confs
 
-    if total_conflicts == 0:
-        return random.choices([True, False])[0]
-        # return False
-    # Calculate probabilities
-    p_true = true_confs / total_conflicts
-    p_false = false_confs / total_conflicts
+#     if total_conflicts == 0:
+#         return random.choices([True, False])[0]
+#         return False
+#     # Calculate probabilities
+#     p_true = true_confs / total_conflicts
+#     p_false = false_confs / total_conflicts
 
-    # Choose based on probability
-    return random.choices([True, False], weights=[p_true, p_false])[0]
+#     # Choose based on probability
+#     # return random.choices([True, False])[0]
+#     return random.choices([True, False], weights=[p_false, p_true])[0]
 
 
 def CDCL(clauses):
@@ -126,20 +142,20 @@ def CDCL(clauses):
         return False
 
     while not all(clause_sat(pa,clause) for clause in clauses):
-        new_lit = pick_new_literal(pa, clauses)
+        new_lit = pick_new_literal(pa, clauses, conflicts_per_assignment)
         decision_level += 1
         assignments += 1
 
-        pa[abs(new_lit)] = pick_truth_value(new_lit, conflicts_per_assignment)
+        # pa[abs(new_lit)] = pick_truth_value(new_lit, conflicts_per_assignment)
 
         # Decide value
-        # if new_lit not in decision_variable_assignments:
-        #     decision_variable_assignments[abs(new_lit)] = False
-        #     pa[abs(new_lit)] = decision_variable_assignments[abs(new_lit)]
-        # else:
-        #     new_truth = not decision_variable_assignments[abs(new_lit)]
-        #     decision_variable_assignments[abs(new_lit)] = new_truth
-        #     pa[abs(new_lit)] = new_truth
+        if new_lit not in decision_variable_assignments:
+            decision_variable_assignments[abs(new_lit)] = False
+            pa[abs(new_lit)] = decision_variable_assignments[abs(new_lit)]
+        else:
+            new_truth = not decision_variable_assignments[abs(new_lit)]
+            decision_variable_assignments[abs(new_lit)] = new_truth
+            pa[abs(new_lit)] = new_truth
 
         decision_levels[abs(new_lit)] = decision_level
 
@@ -147,9 +163,9 @@ def CDCL(clauses):
         while (conflict_clause):
             learned_clause, backtrack_level = conflict_analysis(pa, decision_level, decision_levels, antecedents, conflict_clause)
             # Decay conflicts:
-            for l in conflicts_per_assignment:
-                conflicts_per_assignment[l][True] *= 0.95  # Decay factor
-                conflicts_per_assignment[l][False] *= 0.95
+            # for l in conflicts_per_assignment:
+            #     conflicts_per_assignment[l][True] *= 0.95  # Decay factor
+            #     conflicts_per_assignment[l][False] *= 0.95
             if backtrack_level < 0:
                 print("Not satisfiable")
                 return False
