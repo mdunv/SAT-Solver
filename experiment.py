@@ -1,10 +1,8 @@
 """""
-Usage: python SAT -Sn dimacs_file
+Usage: python experiment.py <directory>
 where:
-    n=1: Basic DPLL
-    n=2: DPLL + VSIDS heuristic
-    n=3: Basic CDCL
-    n=4: CDCL + VSIDS heuristic
+    directory: directory containing sudoku's of form sudoku_*.cnf,
+               default is: 'top100.sdk/'
 """""
 
 import glob
