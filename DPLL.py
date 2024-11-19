@@ -1,8 +1,10 @@
 import random
 import sys
 import time
+import os
 
 solution = {}
+conflicts = 0
 
 def parse_dimacs(filename):
     """
@@ -71,7 +73,7 @@ def pick_new_literal(pa, clauses):
     return None
 
 
-def DPLL(pa, clauses, assigned_lit):
+def DPLL(pa, clauses, assigned_lit, VSIDS):
     "DPLL is used recursively, making use of backtracking to explore whole search space"
     global solution
 
@@ -82,26 +84,28 @@ def DPLL(pa, clauses, assigned_lit):
         solution = pa.copy()
         return True
     if any(len(clause) == 0 for clause in updated_clauses): # Unsatisfiable
+        global conflicts
+        conflicts += 1
         return False
 
     # Perform simplification rules
     unit_literal = simplify(pa, updated_clauses)
     if unit_literal:
         pa[abs(unit_literal)] = True if unit_literal > 0 else False
-        return DPLL(pa, updated_clauses, unit_literal)
+        return DPLL(pa, updated_clauses, unit_literal, VSIDS)
 
     # Select a new literal to recurse/backtrack with
     new_literal = pick_new_literal(pa, updated_clauses)
 
     pa[new_literal] = False # For now assign false
-    if (DPLL(pa, updated_clauses, -new_literal)):
+    if (DPLL(pa, updated_clauses, -new_literal, VSIDS)):
         return True
 
     pa[new_literal] = True # False didn't work so backtrack for true
-    return DPLL(pa, updated_clauses, new_literal)
+    return DPLL(pa, updated_clauses, new_literal, VSIDS)
 
 
-def run_DPLL(filename):
+def run_DPLL(filename, VSIDS):
     clauses = parse_dimacs(filename)
 
     start_time = time.time()
@@ -120,57 +124,62 @@ def run_DPLL(filename):
     new_literal = list(available_literals)[0]
 
     pa[new_literal] = False  # Assign False initially
-    satisfiability = DPLL(pa, clauses, -new_literal)
+    satisfiability = DPLL(pa, clauses, -new_literal, VSIDS)
     if not satisfiability:
         pa[new_literal] = True
-        satisfiability = DPLL(pa, clauses, new_literal)
+        satisfiability = DPLL(pa, clauses, new_literal, VSIDS)
 
     end_time = time.time()
-    print("Runtime:", f"{end_time - start_time}s")
+    runtime = end_time - start_time
 
     if satisfiability:
-        print("Solution found")
+        print("DPLL Solution found:", filename)
     else:
         print("Did not find a solution")
         return
 
-    filename = filename.split(".")
-    filename = f"{filename[0]}.out"
+    base_filename, _ = os.path.splitext(filename)
+    filename = base_filename + '.out'
     with open(filename, "w") as f: # Write the DIMACS output to file
         for literal, value in solution.items():
             dimacs_literal = str(literal) if value else f"-{literal}"
             f.write(dimacs_literal + " 0\n")
 
-    return
+    global conflicts
+    return runtime, conflicts
 
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        runtime, conflicts = run_DPLL(sys.argv[1], False)
 
-if len(sys.argv) > 1:
-    run_DPLL(sys.argv[1])
+        print("Runtime:", runtime)
+        print("Conflicts:", conflicts)
 
-    ### Sudoku representation
-    max_value = max(abs(literal) for literal in solution.keys())
-    # Assuming literals are in the form XYZ, extract the largest component and derive n
-    n = max((max_value // 100), (max_value % 100) // 10, max_value % 10)
+        ### Sudoku representation
+        max_value = max(abs(literal) for literal in solution.keys())
+        # Assuming literals are in the form XYZ, extract the largest component and derive n
+        n = max((max_value // 100), (max_value % 100) // 10, max_value % 10)
 
-    sudoku_grid = [['.' for _ in range(n)] for _ in range(n)]
+        sudoku_grid = [['.' for _ in range(n)] for _ in range(n)]
 
-    # Populate the Sudoku grid with positive literals
-    for literal, value in solution.items():
-        if value:  # Only consider positive literals (True values)
-            # Parse row, column, and digit from the literal key
-            row = (literal // 100) - 1
-            col = ((literal % 100) // 10) - 1
-            digit = (literal % 10)
+        # Populate the Sudoku grid with positive literals
+        for literal, value in solution.items():
+            if value:  # Only consider positive literals (True values)
+                # Parse row, column, and digit from the literal key
+                row = (literal // 100) - 1
+                col = ((literal % 100) // 10) - 1
+                digit = (literal % 10)
 
-            # Place the digit in the corresponding Sudoku cell
-            sudoku_grid[row][col] = str(digit)
+                # Place the digit in the corresponding Sudoku cell
+                sudoku_grid[row][col] = str(digit)
 
-    # Print the Sudoku grid
-    print("Sudoku Grid Representation:")
-    for row in sudoku_grid:
-        print(" ".join(row))
-else:
-    print("Add a filename")
+        # Print the Sudoku grid
+        print("Sudoku Grid Representation:")
+        for row in sudoku_grid:
+            print(" ".join(row))
+    else:
+        print("Add a filename")
+
 
 
 

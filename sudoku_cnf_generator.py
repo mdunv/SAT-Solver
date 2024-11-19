@@ -40,6 +40,8 @@ class SimplifiedSudokuCNFGenerator:
             # Append the common rules from the rules file
             with open(self.rules_filename, 'r') as rules_file:
                 for line in rules_file:
+                    if line.startswith('p') or line.startswith('c') or not line:
+                        continue
                     cnf_file.write(line)
 
     def get_rules_clause_count(self):
@@ -94,11 +96,11 @@ def process_sudoku_file(filename, rules_filename, output_dir):
 
 if __name__ == "__main__":
     # uncomment to select file to parse manually in terminal
-    # if len(sys.argv) != 2:
-    #     print("Usage: python simplified_sudoku_cnf_generator.py <filename>")
-    #     sys.exit(1)
+    if len(sys.argv) < 2:
+        print("Usage: python simplified_sudoku_cnf_generator.py <filename>")
+        sys.exit(1)
 
-    filename = "top91.sdk.txt"
+    filename = sys.argv[1]
     rules_filename = 'sudoku-rules-9x9.txt'
 
     # Create the output directory named after the source file
