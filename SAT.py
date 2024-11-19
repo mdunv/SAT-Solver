@@ -1,5 +1,5 @@
 """""
-Usage: python SAT -Sn dimacs_file
+Usage: python SAT.py -Sn dimacs_file
 where:
     n=1: Basic DPLL
     n=2: DPLL + VSIDS heuristic

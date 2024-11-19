@@ -23,7 +23,7 @@ def resolve_clauses(clause1, clause2, literal):
     return (clause1 | clause2) - {literal, -literal}
 
 
-def conflict_analysis(pa, current_level, decision_levels, antecedents, conflict_clause):
+def conflict_analysis(pa, current_level, decision_levels, antecedents, conflict_clause, assign_conflicts):
     """
     Simplified conflict analysis using union of conflict and antecedent clauses.
     """
@@ -33,8 +33,11 @@ def conflict_analysis(pa, current_level, decision_levels, antecedents, conflict_
         literals_in_curr_lvl = [lit for lit in learned_clause if decision_levels[abs(lit)] == current_level and abs(lit) in antecedents]
         if len(literals_in_curr_lvl) == 0:
             break
+
         while len(literals_in_curr_lvl) > 0:
             lit = literals_in_curr_lvl.pop()
+            # Update conflicts
+            assign_conflicts[abs(lit)] += 1 # Add to conflicts found
 
             antecedent_clause = antecedents[abs(lit)]
             learned_clause = resolve_clauses(learned_clause, antecedent_clause, lit)
@@ -54,7 +57,7 @@ def clause_sat(pa, clause):
     return False
 
 
-def unit_propogation(pa, clauses, decision_levels, antecedents, conflicts_per_assignment, current_level):
+def unit_propogation(pa, clauses, decision_levels, antecedents, assign_conflicts, current_level):
     while True:
         found_unit_clause = False
 
@@ -73,13 +76,11 @@ def unit_propogation(pa, clauses, decision_levels, antecedents, conflicts_per_as
 
             elif len(unassigned_literals) == 0: # Conflict (Fully assigned but none satisfy clause)
                 for literal in clause:
-                    truth_value = pa[abs(literal)]  # Add to conflicts found
-                    conflicts_per_assignment[abs(literal)][truth_value] += 1
+                    assign_conflicts[abs(literal)] += 1 # Add to conflicts found
                 return clause
 
         if not found_unit_clause:
             break
-
 
     return None
 
@@ -93,8 +94,7 @@ def pick_new_literal(pa, clauses, conflicts_per_assignment, VSIDS):
         for clause in clauses:
             for literal in clause:
                 if abs(literal) not in pa:  # Only consider unassigned literals
-                    conflicts = conflicts_per_assignment.get(abs(literal), 0)
-                    activity = conflicts[True] + conflicts[False]
+                    activity = conflicts_per_assignment.get(abs(literal), 0)
                     if activity > max_activity:
                         max_activity = activity
                         best_literal = literal
@@ -123,21 +123,6 @@ def assign_truth_value(new_lit, pa, decision_variable_assignments, decision_leve
         decision_levels[abs(new_lit)] = decision_level
 
 
-    # true_confs, false_confs = past_conflicts[abs(literal)][True], past_conflicts[abs(literal)][False]
-    # total_conflicts = true_confs + false_confs
-
-    # if total_conflicts == 0:
-    #     return random.choices([True, False])[0]
-    #     return False
-    # # Calculate probabilities
-    # p_true = true_confs / total_conflicts
-    # p_false = false_confs / total_conflicts
-
-    # # Choose based on probability
-    # # return random.choices([True, False])[0]
-    # return random.choices([True, False], weights=[p_false, p_true])[0]
-
-
 def CDCL(clauses, VSIDS):
     # Metrics
     conflicts = 0
@@ -147,30 +132,29 @@ def CDCL(clauses, VSIDS):
     decision_variable_assignments = {} # Hold currently assigned truth values for each literal
     pa = {} # Partial Assignment
     antecedents = {} # Holds the clauses unit propogation literals come from
-    conflicts_per_assignment = {}
+    assign_conflicts = {}
     decision_level = 0
 
     for clause in clauses:
         for l in clause:
-            if l not in conflicts_per_assignment:
-                conflicts_per_assignment[abs(l)] = {True : 0, False : 0}
+            if l not in assign_conflicts:
+                assign_conflicts[abs(l)] = 0
 
-    conflict = unit_propogation(pa, clauses, decision_levels, antecedents, conflicts_per_assignment, decision_level)
+    conflict = unit_propogation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level)
     if (conflict): # Unsatisfiable
 
         return False, False
 
     while not all(clause_sat(pa,clause) for clause in clauses):
-        new_lit = pick_new_literal(pa, clauses, conflicts_per_assignment, VSIDS)
+        new_lit = pick_new_literal(pa, clauses, assign_conflicts, VSIDS)
         decision_level += 1
 
         assign_truth_value(new_lit, pa, decision_variable_assignments, decision_levels, decision_level)
 
-
-        conflict_clause = unit_propogation(pa, clauses, decision_levels, antecedents, conflicts_per_assignment, decision_level)
+        conflict_clause = unit_propogation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level)
         while (conflict_clause):
             conflicts += 1
-            learned_clause, backtrack_level = conflict_analysis(pa, decision_level, decision_levels, antecedents, conflict_clause)
+            learned_clause, backtrack_level = conflict_analysis(pa, decision_level, decision_levels, antecedents, conflict_clause, assign_conflicts)
 
             if backtrack_level < 0:
                 print("Not satisfiable")
@@ -185,11 +169,10 @@ def CDCL(clauses, VSIDS):
 
             # Decay conflicts:
             if VSIDS:
-                for l in conflicts_per_assignment:
-                    conflicts_per_assignment[l][True] *= 0.95  # Decay factor
-                    conflicts_per_assignment[l][False] *= 0.95
+                for l in assign_conflicts:
+                    assign_conflicts[l] *= 0.95  # Decay factor
 
-            conflict_clause = unit_propogation(pa, clauses, decision_levels, antecedents, conflicts_per_assignment, decision_level)
+            conflict_clause = unit_propogation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level)
 
     return pa, conflicts
 
@@ -213,7 +196,7 @@ def run_CDCL(filename, VSIDS):
     filename = base_filename + '.out'
     with open(filename, "w") as f:  # Write the DIMACS output to file
         for literal, value in pa.items():
-            dimacs_literal = str(literal) if value else f"-{literal}"
+            dimacs_literal = str(abs(literal)) if value else f"-{abs(literal)}"
             f.write(dimacs_literal + " 0\n")
 
     return pa, runtime, conflicts
