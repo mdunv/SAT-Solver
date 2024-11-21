@@ -240,7 +240,7 @@ if __name__ == "__main__":
     # else:
     #     print("Add a filename")
 
-    filename = "top91.sdk/sudoku_2.cnf"  # Replace with your file path
+    filename = "top91.sdk/sudoku_3.cnf"  # Replace with your file path
     if not os.path.exists(filename):
         print("File not found. Please ensure the file exists at the specified path.")
         exit()
@@ -249,10 +249,10 @@ if __name__ == "__main__":
 
     print(f"\nTesting {filename} with DPLL solver:\n")
 
-    # print("Running DPLL without VSIDS:")
-    # for i in range(num_trials):
-    #     runtime, conflicts = run_DPLL(filename, False)
-    #     print(f"  Trial {i + 1}: Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
+    print("Running DPLL without VSIDS:")
+    for i in range(num_trials):
+        runtime, conflicts = run_DPLL(filename, False)
+        print(f"  Trial {i + 1}: Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
 
     print("\nRunning DPLL with VSIDS:")
     for i in range(num_trials):
