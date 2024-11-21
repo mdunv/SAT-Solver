@@ -10,8 +10,8 @@ where:
 """""
 import sys
 
-import DPLL
-import CDCL
+import DPLL_VSIDS
+import CDCL_VSIDS
 
 
 def run_solver(filename, heuristic):

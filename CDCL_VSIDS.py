@@ -23,11 +23,12 @@ def resolve_clauses(clause1, clause2, literal):
     """
     return (clause1 | clause2) - {literal, -literal}
 
-def conflict_analysis(pa, current_level, decision_levels, antecedents, conflict_clause, assign_conflicts, activity_scores):
+def conflict_analysis(pa, current_level, decision_levels, antecedents, conflict_clause, assign_conflicts, activity_scores, verbose=False):
     """
     Perform conflict analysis to produce a learned clause and update activity scores.
     """
-    print(f"\nStarting conflict analysis at level {current_level} with conflict clause: {conflict_clause}")
+    if verbose:
+        print(f"\nStarting conflict analysis at level {current_level} with conflict clause: {conflict_clause}")
     learned_clause = set(conflict_clause)  # Start with the conflict clause
 
     while True:
@@ -38,19 +39,23 @@ def conflict_analysis(pa, current_level, decision_levels, antecedents, conflict_
         lit = literals_in_curr_lvl.pop()
         assign_conflicts[abs(lit)] += 1  # Update conflict counts
         antecedent_clause = antecedents[abs(lit)]
-        print(f"Resolving on literal {lit} with antecedent clause {antecedent_clause}")
+        if verbose:
+            print(f"Resolving on literal {lit} with antecedent clause {antecedent_clause}")
         learned_clause = resolve_clauses(learned_clause, antecedent_clause, lit)
-        print(f"New learned clause: {learned_clause}")
+        if verbose:
+            print(f"New learned clause: {learned_clause}")
 
     # Update activity scores
     for lit in learned_clause:
         activity_scores[abs(lit)] += 1
-        print(f"Incremented activity score of variable {abs(lit)} to {activity_scores[abs(lit)]}")
+        if verbose:
+            print(f"Incremented activity score of variable {abs(lit)} to {activity_scores[abs(lit)]}")
 
     # Determine the backtrack level
     backtrack_levels = [decision_levels.get(abs(lit), 0) for lit in learned_clause if abs(lit) in decision_levels and decision_levels[abs(lit)] != current_level]
     backtrack_level = max(backtrack_levels) if backtrack_levels else 0
-    print(f"Backtrack level determined to be {backtrack_level}")
+    if verbose:
+        print(f"Backtrack level determined to be {backtrack_level}")
     return learned_clause, backtrack_level
 
 def clause_sat(pa, clause):
@@ -63,7 +68,7 @@ def clause_sat(pa, clause):
                 return True
     return False
 
-def unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, current_level):
+def unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, current_level, verbose=False):
     """
     Perform unit propagation and return a conflicting clause if a conflict occurs.
     """
@@ -82,10 +87,12 @@ def unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts
                 decision_levels[abs(unit_literal)] = current_level
                 antecedents[abs(unit_literal)] = clause  # Add clause of origin as antecedent
                 found_unit_clause = True
-                print(f"Unit propagation: Assigned {unit_literal} at level {current_level} due to clause {clause}")
+                if verbose:
+                    print(f"Unit propagation: Assigned {unit_literal} at level {current_level} due to clause {clause}")
 
             elif len(unassigned_literals) == 0:  # Conflict detected
-                print(f"Conflict detected during unit propagation at level {current_level} in clause {clause}")
+                if verbose:
+                    print(f"Conflict detected during unit propagation at level {current_level} in clause {clause}")
                 for literal in clause:
                     assign_conflicts[abs(literal)] += 1  # Update conflict counts
                 return clause
@@ -95,37 +102,41 @@ def unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts
 
     return None
 
-def pick_new_literal(pa, clauses, activity_scores, VSIDS):
+def pick_new_literal(pa, clauses, activity_scores, VSIDS, verbose=False):
     """
     Pick the next variable to assign using VSIDS if enabled.
     """
     unassigned_variables = {abs(literal) for clause in clauses for literal in clause if abs(literal) not in pa}
 
     if not unassigned_variables:
-        print("No unassigned variables left.")
+        if verbose:
+            print("No unassigned variables left.")
         return None
 
     if VSIDS:
         best_var = max(unassigned_variables, key=lambda var: activity_scores.get(var, 0))
-        print(f"Picking variable {best_var} with highest activity score {activity_scores.get(best_var, 0)}")
+        if verbose:
+            print(f"Picking variable {best_var} with highest activity score {activity_scores.get(best_var, 0)}")
         return best_var
     else:
         for clause in clauses:
             for literal in clause:
                 if abs(literal) not in pa:
-                    print(f"Picking variable {abs(literal)} (default heuristic)")
+                    if verbose:
+                        print(f"Picking variable {abs(literal)} (default heuristic)")
                     return abs(literal)
     return None
 
-def decay_activity_scores(activity_scores, decay_factor):
+def decay_activity_scores(activity_scores, decay_factor, verbose=False):
     """
     Decay the activity scores of all variables.
     """
     for var in activity_scores:
         activity_scores[var] *= decay_factor
-    print(f"Activity scores after decay: {activity_scores}")
+    if verbose:
+        print(f"Activity scores after decay: {activity_scores}")
 
-def CDCL(clauses, VSIDS):
+def CDCL(clauses, VSIDS, verbose=False):
     # Metrics
     conflicts = 0
 
@@ -147,15 +158,17 @@ def CDCL(clauses, VSIDS):
             activity_scores.setdefault(abs(l), 0)
             assign_conflicts.setdefault(abs(l), 0)
 
-    conflict = unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level)
+    conflict = unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level, verbose)
     if conflict:  # Unsatisfiable during initial unit propagation
-        print("Unsatisfiable during initial unit propagation")
+        if verbose:
+            print("Unsatisfiable during initial unit propagation")
         return False, conflicts
 
     while not all(clause_sat(pa, clause) for clause in clauses):
-        new_lit = pick_new_literal(pa, clauses, activity_scores, VSIDS)
+        new_lit = pick_new_literal(pa, clauses, activity_scores, VSIDS, verbose)
         if new_lit is None:
-            print("No unassigned literals left, but not all clauses are satisfied")
+            if verbose:
+                print("No unassigned literals left, but not all clauses are satisfied")
             return False, conflicts
         decision_level += 1
 
@@ -163,23 +176,27 @@ def CDCL(clauses, VSIDS):
         pa[new_lit] = False
         decision_levels[new_lit] = decision_level
         decision_variable_assignments[new_lit] = False
-        print(f"\nDecision level {decision_level}: Assigning variable {new_lit} to False")
+        if verbose:
+            print(f"\nDecision level {decision_level}: Assigning variable {new_lit} to False")
 
-        conflict_clause = unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level)
+        conflict_clause = unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level, verbose)
         while conflict_clause:
             conflicts += 1
-            print(f"Conflict detected at decision level {decision_level}. Conflict clause: {conflict_clause}")
+            if verbose:
+                print(f"Conflict detected at decision level {decision_level}. Conflict clause: {conflict_clause}")
 
-            learned_clause, backtrack_level = conflict_analysis(pa, decision_level, decision_levels, antecedents, conflict_clause, assign_conflicts, activity_scores)
-            print(f"Learned clause: {learned_clause}")
-            print(f"Backtracking to level {backtrack_level}")
+            learned_clause, backtrack_level = conflict_analysis(pa, decision_level, decision_levels, antecedents, conflict_clause, assign_conflicts, activity_scores, verbose)
+            if verbose:
+                print(f"Learned clause: {learned_clause}")
+                print(f"Backtracking to level {backtrack_level}")
 
             if backtrack_level < 0:
-                print("Not satisfiable after conflict analysis")
+                if verbose:
+                    print("Not satisfiable after conflict analysis")
                 return False, conflicts
 
             clauses.append(learned_clause)  # Add the learned clause
-            decay_activity_scores(activity_scores, decay_factor)
+            decay_activity_scores(activity_scores, decay_factor, verbose)
 
             # Backtrack
             decision_level = backtrack_level
@@ -193,60 +210,67 @@ def CDCL(clauses, VSIDS):
                     del decision_levels[var]
                 if var in decision_variable_assignments:
                     del decision_variable_assignments[var]
-                print(f"Backtracked variable {var}")
+                if verbose:
+                    print(f"Backtracked variable {var}")
 
-            conflict_clause = unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level)
+            conflict_clause = unit_propagation(pa, clauses, decision_levels, antecedents, assign_conflicts, decision_level, verbose)
             if conflict_clause:
-                print(f"Conflict detected during unit propagation after backtracking at level {decision_level}. Conflict clause: {conflict_clause}")
-
-    print("\nSatisfiable assignment found")
+                if verbose:
+                    print(f"Conflict detected during unit propagation after backtracking at level {decision_level}. Conflict clause: {conflict_clause}")
+        if verbose:
+            print("\nSatisfiable assignment found")
     return pa, conflicts
 
-def run_CDCL(filename, VSIDS):
+def run_CDCL(filename, VSIDS, verbose=False):
     clauses = parse_dimacs(filename)
 
     start_time = time.time()
-    pa, conflicts = CDCL(clauses, VSIDS)
+    pa, conflicts = CDCL(clauses, VSIDS, verbose)
     end_time = time.time()
 
     runtime = end_time - start_time
 
     if pa:
-        print("\nCDCL Solution found:", filename)
+        if VSIDS:
+            print(f"CDCL with VSIDS has found a solution to: {filename}")
+        else:
+            print(f"CDCL without VSIDS has found a solution to: {filename}")
         print("Total runtime:", runtime)
         print("Total conflicts:", conflicts)
     else:
-        print("Did not find a solution")
-        return False
+        if VSIDS:
+            print(f"CDCL with VSIDS could not find a solution for: {filename}")
+        else:
+            print(f"CDCL without VSIDS could not find a solution for: {filename}")
 
-    # Write the solution to an output file
-    base_filename, _ = os.path.splitext(filename)
-    output_filename = base_filename + '.out'
-    with open(output_filename, "w") as f:
-        for literal, value in pa.items():
-            dimacs_literal = str(literal) if value else f"-{literal}"
-            f.write(dimacs_literal + " 0\n")
+    # # (optional) Write the solution to an output file
+    # base_filename, _ = os.path.splitext(filename)
+    # output_filename = base_filename + '.out'
+    # with open(output_filename, "w") as f:
+    #     for literal, value in pa.items():
+    #         dimacs_literal = str(literal) if value else f"-{literal}"
+    #         f.write(dimacs_literal + " 0\n")
 
     # Optional: Print the Sudoku grid representation if applicable
-    max_value = max(abs(literal) for literal in pa.keys())
-    n = 9  # For standard Sudoku puzzles
-    sudoku_grid = [['.' for _ in range(n)] for _ in range(n)]
-
-    # Populate the Sudoku grid with positive literals
-    for literal, value in pa.items():
-        if value:  # Only consider positive literals (True values)
-            # Parse row, column, and digit from the literal key
-            row = (literal // 100) - 1
-            col = ((literal % 100) // 10) - 1
-            digit = (literal % 10)
-
-            # Place the digit in the corresponding Sudoku cell
-            sudoku_grid[row][col] = str(digit)
-
-    # Print the Sudoku grid
-    print("\nSudoku Grid Representation:")
-    for row in sudoku_grid:
-        print(" ".join(row))
+    # max_value = max(abs(literal) for literal in pa.keys())
+    # n = 9  # For standard Sudoku puzzles
+    # sudoku_grid = [['.' for _ in range(n)] for _ in range(n)]
+    #
+    # # Populate the Sudoku grid with positive literals
+    # for literal, value in pa.items():
+    #     if value:  # Only consider positive literals (True values)
+    #         # Parse row, column, and digit from the literal key
+    #         row = (literal // 100) - 1
+    #         col = ((literal % 100) // 10) - 1
+    #         digit = (literal % 10)
+    #
+    #         # Place the digit in the corresponding Sudoku cell
+    #         sudoku_grid[row][col] = str(digit)
+    #
+    #     # Print the Sudoku grid
+    #     print("\nSudoku Grid Representation:")
+    #     for row in sudoku_grid:
+    #         print(" ".join(row))
 
     return pa, runtime, conflicts
 
@@ -270,12 +294,12 @@ if __name__ == "__main__":
     # Run CDCL with and without VSIDS
     print("Running CDCL without VSIDS:")
     for i in range(num_trials):
-        solution, runtime, conflicts = run_CDCL(filename, False)
+        solution, runtime, conflicts = run_CDCL(filename, False, verbose=False)
         print(f"  Trial {i + 1}: Solution = {solution}, Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
 
     print("\nRunning CDCL with VSIDS:")
     for i in range(num_trials):
-        solution, runtime, conflicts = run_CDCL(filename, True)
+        solution, runtime, conflicts = run_CDCL(filename, True, verbose=False)
         print(f"  Trial {i + 1}: Solution = {solution}, Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
 
     print("\nTesting completed.")

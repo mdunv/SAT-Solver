@@ -10,8 +10,8 @@ import sys
 import os
 import numpy as np
 
-import DPLL
-import CDCL
+import DPLL_VSIDS as DPLL
+import CDCL_VSIDS as CDCL
 
 def run_experiment(directory="top100.sdk/"):
     sudoku_files = glob.glob(os.path.join(directory, "sudoku_*.cnf"))
@@ -41,7 +41,7 @@ def run_experiment(directory="top100.sdk/"):
         runtime4.append(runt)
         conflicts4.append(conf)
 
-    # print("\nDPLL without heuristics:")
+    print("\n\nDPLL without heuristics:")
     print("Mean runtime:", np.mean(runtime1), "\nMax runtime:", np.max(runtime1), "\nMin runtime:", np.min(runtime1))
     print("\nMean conflicts:", np.mean(conflicts1), "\nMax conflicts:", np.max(conflicts1), "\nMin conflicts:", np.min(conflicts1))
 
