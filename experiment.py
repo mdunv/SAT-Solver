@@ -10,8 +10,8 @@ import sys
 import os
 import numpy as np
 
-import DPLL_VSIDS as DPLL
-import CDCL_VSIDS as CDCL
+import DPLL
+import CDCL
 
 def run_experiment(directory="top100.sdk/"):
     sudoku_files = glob.glob(os.path.join(directory, "sudoku_*.cnf"))
