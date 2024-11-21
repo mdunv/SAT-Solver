@@ -187,10 +187,15 @@ def run_CDCL(filename, VSIDS):
     runtime = end_time - start_time
 
     if pa:
-        print("CDCL Solution found:", filename)
+        if VSIDS:
+            print(f"CDCL with VSIDS has found a solution to: {filename}")
+        else:
+            print(f"CDCL without VSIDS has found a solution to: {filename}")
     else:
-        print("Did not find a solution")
-        return False
+        if VSIDS:
+            print(f"CDCL with VSIDS could not find a solution for: {filename}")
+        else:
+            print(f"CDCL without VSIDS could not find a solution for: {filename}")
 
     base_filename, _ = os.path.splitext(filename)
     filename = base_filename + '.out'
@@ -210,9 +215,9 @@ if __name__ == "__main__":
         print("Conflicts:", conflicts)
 
 
-        ### Sudoku representation
+        # ### Sudoku representation
         max_value = max(abs(literal) for literal in solution.keys())
-        # Assuming literals are in the form XYZ, extract the largest component and derive n
+        # # Assuming literals are in the form XYZ, extract the largest component and derive n
         n = max((max_value // 100), (max_value % 100) // 10, max_value % 10)
 
         sudoku_grid = [['.' for _ in range(n)] for _ in range(n)]
@@ -232,7 +237,8 @@ if __name__ == "__main__":
         print("Sudoku Grid Representation:")
         for row in sudoku_grid:
             print(" ".join(row))
-    else:
-        print("Add a filename")
+
+        else:
+            print("Add a filename")
 
 

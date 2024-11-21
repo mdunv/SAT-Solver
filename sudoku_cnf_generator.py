@@ -10,7 +10,7 @@ class SudokuCNFGenerator:
         if self.N * self.N != len(sudoku_string):
             raise ValueError("Invalid Sudoku puzzle size.")
         self.char_to_num = self.create_char_to_number_mapping()
-        self.max_variable_number = 0  # To track the maximum variable number used
+        self.max_variable_number = 0
 
     def create_char_to_number_mapping(self):
         """
@@ -49,7 +49,7 @@ class SudokuCNFGenerator:
                 value = self.sudoku_string[i * self.N + j]
                 if value != '.':
                     if value not in self.char_to_num:
-                        # print(f"Error: Invalid character '{value}' at position ({i + 1}, {j + 1})")
+                        print(f"Error: Invalid character '{value}' at position ({i + 1}, {j + 1})")
                         continue
                     row = i + 1
                     column = j + 1
@@ -57,9 +57,6 @@ class SudokuCNFGenerator:
 
                     # Compute the variable number using the appropriate encoding
                     variable_number = self.compute_variable_number(row, column, number)
-
-                    # Update the maximum variable number
-                    self.max_variable_number = max(self.max_variable_number, variable_number)
 
                     # Append this as a clause
                     self.clauses.append(f"{variable_number} 0")
@@ -157,6 +154,5 @@ if __name__ == "__main__":
 
     # Create the output directory named after the source file
     output_dir = create_output_directory(input_filename)
-
     # Process the Sudoku file and generate CNF files
     process_sudoku_file(input_filename, output_dir)
