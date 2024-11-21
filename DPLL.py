@@ -7,6 +7,7 @@ import os
 solution = {}
 conflicts = 0
 activity_scores = {}
+sys.setrecursionlimit(10000)
 
 decay_factor = 0.75  # Decay factor to reduce older activity scores
 
@@ -125,7 +126,8 @@ def DPLL(pa, clauses, assigned_lit, VSIDS, verbose):
     if assigned_lit is not None:
         updated_clauses, conflicting_clauses = remove_literal(clauses, assigned_lit)
         if verbose:
-            print(f"Assigned Literal: {assigned_lit}, Updated Clauses: {updated_clauses}")
+            print(f"Assigned "
+                  f"Literal: {assigned_lit}, Updated Clauses: {updated_clauses}")
     else:
         updated_clauses = clauses
         conflicting_clauses = []
@@ -229,25 +231,59 @@ def run_DPLL(filename, VSIDS, verbose=False):
 
     return runtime, conflicts
 
+def run_DPLL_mode(filename, mode="non-vsids", verbose=False):
+    """
+    Run DPLL in the specified mode: "non-vsids", "vsids", or "both".
+
+    Returns:
+        results (dict): A dictionary containing runtime and conflict stats for the specified mode(s).
+    """
+    results = {}
+
+    if mode == "non-vsids" or mode == "both":
+        start = time.time()
+        runtime, conflicts = run_DPLL(filename, False, verbose=verbose)
+        end = time.time()
+        results["non-vsids"] = {"runtime": runtime, "conflicts": conflicts, "total_time": end - start}
+
+    if mode == "vsids" or mode == "both":
+        start = time.time()
+        runtime, conflicts = run_DPLL(filename, True, verbose=verbose)
+        end = time.time()
+        results["vsids"] = {"runtime": runtime, "conflicts": conflicts, "total_time": end - start}
+
+    return results
+
 if __name__ == "__main__":
+    import argparse
 
-    filename = "top91.sdk/sudoku_3.cnf"  # Replace with your file path
-    if not os.path.exists(filename):
-        print("File not found. Please ensure the file exists at the specified path.")
-        exit()
+    def interpret_vsids_flag(flag):
+        """Interpret VSIDS flag for CLI input."""
+        if not flag or flag.lower() in ["false", "non-vsids"]:
+            return "non-vsids"
+        elif flag.lower() in ["true", "vsids"]:
+            return "vsids"
+        elif flag.lower() == "both":
+            return "both"
+        else:
+            raise ValueError(f"Invalid VSIDS flag: {flag}. Use 'vsids', 'non-vsids', or 'both'.")
 
-    num_trials = 1  # Number of times to run the solver for each mode
+    # Command-line interface
+    parser = argparse.ArgumentParser(description="DPLL SAT Solver for Sudoku")
+    parser.add_argument("VSIDS", nargs='?', default="False", help="VSIDS heuristic: vsids/True, non-vsids/False, or both")
+    parser.add_argument("filename", help="Path to the DIMACS CNF file")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    args = parser.parse_args()
 
-    print(f"\nTesting {filename} with DPLL solver:\n")
+    mode = interpret_vsids_flag(args.VSIDS)
+    filename = args.filename
+    verbose = args.verbose
 
-    print("Running DPLL without VSIDS:")
-    for i in range(num_trials):
-        runtime, conflicts = run_DPLL(filename, False, verbose=True)
-        print(f"  Trial {i + 1}: Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
+    print(f"\nTesting {filename} with DPLL solver in {mode} mode:\n")
+    results = run_DPLL_mode(filename, mode=mode, verbose=verbose)
 
-    print("\nRunning DPLL with VSIDS:")
-    for i in range(num_trials):
-        runtime, conflicts = run_DPLL(filename, True, verbose=True)
-        print(f"  Trial {i + 1}: Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
+    for key, result in results.items():
+        print(f"\n{key.capitalize()} Results:")
+        print(f"Runtime: {result['runtime']:.3f}s, Conflicts: {result['conflicts']}")
 
     print("\nTesting completed.")

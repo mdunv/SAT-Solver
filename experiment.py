@@ -22,24 +22,24 @@ def run_experiment(directory="top100.sdk/"):
 
     for filepath in sudoku_files:
         # DPLL without heuristic
-        runt, conf = DPLL.run_DPLL(filepath, False)
-        runtime1.append(runt)
-        conflicts1.append(conf)
+        results = DPLL.run_DPLL_mode(filepath, mode="non-vsids")
+        runtime1.append(results["non-vsids"]["runtime"])
+        conflicts1.append(results["non-vsids"]["conflicts"])
 
-        # DPLL + VSIDS
-        runt, conf = DPLL.run_DPLL(filepath, True)
-        runtime2.append(runt)
-        conflicts2.append(conf)
+        # DPLL with VSIDS
+        results = DPLL.run_DPLL_mode(filepath, mode="vsids")
+        runtime2.append(results["vsids"]["runtime"])
+        conflicts2.append(results["vsids"]["conflicts"])
 
         # CDCL without heuristic
-        _, runt, conf = CDCL.run_CDCL(filepath, False)
-        runtime3.append(runt)
-        conflicts3.append(conf)
+        results = CDCL.run_CDCL_mode(filepath, mode="non-vsids")
+        runtime3.append(results["non-vsids"]["runtime"])
+        conflicts3.append(results["non-vsids"]["conflicts"])
 
-        # CDCL + VSIDS
-        _, runt, conf = CDCL.run_CDCL(filepath, True)
-        runtime4.append(runt)
-        conflicts4.append(conf)
+        # CDCL with VSIDS
+        results = CDCL.run_CDCL_mode(filepath, mode="vsids")
+        runtime4.append(results["vsids"]["runtime"])
+        conflicts4.append(results["vsids"]["conflicts"])
 
     print("\n\nDPLL without heuristics:")
     print("Mean runtime:", np.mean(runtime1), "\nMax runtime:", np.max(runtime1), "\nMin runtime:", np.min(runtime1))

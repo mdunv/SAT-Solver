@@ -274,32 +274,68 @@ def run_CDCL(filename, VSIDS, verbose=False):
 
     return pa, runtime, conflicts
 
+def run_CDCL_mode(filename, mode="non-vsids", verbose=False):
+    """
+    Run CDCL in the specified mode: "non-vsids", "vsids", or "both".
+
+    Returns:
+        results (dict): A dictionary containing runtime and conflict stats for the specified mode(s).
+    """
+    results = {}
+
+    if mode == "non-vsids" or mode == "both":
+        start = time.time()
+        pa, runtime, conflicts = run_CDCL(filename, False, verbose)
+        end = time.time()
+        runtime = end - start
+        results["non-vsids"] = {"solution": pa, "runtime": runtime, "conflicts": conflicts}
+
+    if mode == "vsids" or mode == "both":
+        start = time.time()
+        pa, runtime, conflicts = run_CDCL(filename, True, verbose)
+        end = time.time()
+        runtime = end - start
+        results["vsids"] = {"solution": pa, "runtime": runtime, "conflicts": conflicts}
+
+    return results
+
 if __name__ == "__main__":
-    # Default filename if no argument is provided
-    filename = "top91.sdk/sudoku_4.cnf"
+    import argparse
 
-    # Check if a filename is provided via command line
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
+    def interpret_vsids_flag(flag):
+        """Interpret VSIDS flag for CLI input."""
+        if not flag or flag.lower() in ["false", "non-vsids"]:
+            return "non-vsids"
+        elif flag.lower() in ["true", "vsids"]:
+            return "vsids"
+        elif flag.lower() == "both":
+            return "both"
+        else:
+            raise ValueError(f"Invalid VSIDS flag: {flag}. Use 'vsids', 'non-vsids', or 'both'.")
 
-    # Check if the file exists
+    # Command-line interface
+    parser = argparse.ArgumentParser(description="CDCL SAT Solver for Sudoku")
+    parser.add_argument("VSIDS", nargs='?', default="False", help="VSIDS heuristic: vsids/True, non-vsids/False, or both")
+    parser.add_argument("filename", help="Path to the DIMACS CNF file")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    args = parser.parse_args()
+
+    mode = interpret_vsids_flag(args.VSIDS)
+    filename = args.filename
+    verbose = args.verbose
+
+    # Ensure file exists
     if not os.path.exists(filename):
         print(f"File not found: {filename}. Please ensure the file exists at the specified path.")
         sys.exit(1)
 
-    num_trials = 1  # Number of times to run the solver for each mode
+    print(f"\nTesting {filename} with CDCL solver in {mode} mode:\n")
+    results = run_CDCL_mode(filename, mode=mode, verbose=verbose)
 
-    print(f"\nTesting {filename} with CDCL solver:\n")
-
-    # Run CDCL with and without VSIDS
-    print("Running CDCL without VSIDS:")
-    for i in range(num_trials):
-        solution, runtime, conflicts = run_CDCL(filename, False, verbose=False)
-        print(f"  Trial {i + 1}: Solution = {solution}, Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
-
-    print("\nRunning CDCL with VSIDS:")
-    for i in range(num_trials):
-        solution, runtime, conflicts = run_CDCL(filename, True, verbose=False)
-        print(f"  Trial {i + 1}: Solution = {solution}, Runtime = {runtime:.3f}s, Conflicts = {conflicts}")
+    for key, result in results.items():
+        print(f"\n{key.capitalize()} Results:")
+        print(f"  Runtime: {result['runtime']:.3f}s")
+        print(f"  Conflicts: {result['conflicts']}")
+        print(f"  Solution: {result['solution']}")
 
     print("\nTesting completed.")
