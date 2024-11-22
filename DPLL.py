@@ -3,187 +3,249 @@ import sys
 import time
 import os
 
+sys.setrecursionlimit(10**6)
+
+# Global variables
 solution = {}
 conflicts = 0
+activity_scores = {}
+
+decay_factor = 0.75  # Decay factor to reduce older activity scores
 
 def parse_dimacs(filename):
     """
-    Parse a DIMACs file containing a ecnoded sudoku, returning a variables:
-    clauses: a list of sets, representing different clauses
+    Parse a DIMACs file containing a sudoku, returning variables:
+    clauses: a list of sets, representing different clauses.
     """
     clauses = []
     with open(filename, 'r') as f:
         for line in f:
-            if line.startswith('p') or line.startswith('c') or not line:
+            if line.startswith('p') or line.startswith('c') or not line.strip():
                 continue
             clause = {int(x) for x in line.strip().split()[:-1]}  # Remove trailing 0
             clauses.append(clause)
-
     return clauses
 
 
-def create_clause_mapping(clauses):
-    "Create a mapping from literals to all clause numbers they are in"
-    cell_mapping = dict(set())
-    for clause_index, clause in enumerate(clauses):
-        for variable in clause:
-            if variable not in cell_mapping:
-                cell_mapping[variable] = set()
-
-            cell_mapping[variable].add(clause_index)
-
-    return cell_mapping
-
-
-def simplify(pa, clauses):
-    "Apply the pure literal and unit rules to remove unnecessary entries"
+def simplify(pa, clauses, verbose):
+    """
+    Apply the pure literal and unit rules to remove unnecessary entries.
+    """
     # Unit clause rule
     for clause in clauses:
         if len(clause) == 1:
-            return next(iter(clause))
+            unit_lit = next(iter(clause))
+            if verbose:
+                print(f"Unit clause found: {unit_lit}")
+            return unit_lit
 
     # Pure literals rule
-    clause_mapping = create_clause_mapping(clauses)
-    for variable in clause_mapping:
-        if variable*-1 not in clause_mapping: # check if literal is pure
-            return variable
+    literals = set()
+    for clause in clauses:
+        literals.update(clause)
+    pure_literals = literals - set(-lit for lit in literals)
+    if pure_literals:
+        pure_lit = next(iter(pure_literals))
+        if verbose:
+            print(f"Pure literal found: {pure_lit}")
+        return pure_lit
 
     return None
 
 
 def remove_literal(clauses, assigned_lit):
+    """
+    Remove clauses satisfied by the literal and update remaining clauses.
+    Returns updated clauses and a list of conflicting clauses if any clauses become empty.
+    """
     updated_clauses = []
+    conflicting_clauses = []
     for clause in clauses:
         if assigned_lit in clause:
-            continue
+            continue  # Clause is satisfied
         elif -assigned_lit in clause:
-            # Remove the negation of the assigned literal from this clause
-            new_clause = set(clause) - {-assigned_lit}
+            new_clause = clause - {-assigned_lit}
+            if len(new_clause) == 0:
+                conflicting_clauses.append(clause)  # Use the original clause
             updated_clauses.append(new_clause)
         else:
             updated_clauses.append(clause)
+    return updated_clauses, conflicting_clauses
 
-    return updated_clauses
 
+def pick_new_literal(pa, clauses, VSIDS, verbose):
+    """
+    Pick the next variable to branch on, using VSIDS if enabled.
+    """
+    unassigned_variables = {abs(literal) for clause in clauses for literal in clause if abs(literal) not in pa}
 
-def pick_new_literal(pa, clauses):
-    for clause in clauses:
-        for literal in clause:
-            return abs(literal)
+    if not unassigned_variables:  # Check if there are no unassigned variables left
+        if verbose:
+            print("No unassigned variables left.")
+        return None
+
+    if VSIDS:
+        chosen = max(unassigned_variables, key=lambda var: activity_scores.get(var, 0))
+        if verbose:
+            print(f"Choosing variable {chosen} with highest activity score {activity_scores.get(chosen, 0)}.")
+        return chosen
+    else:
+        for clause in clauses:
+            for literal in clause:
+                if abs(literal) not in pa:
+                    if verbose:
+                        print(f"Choosing first unassigned variable: {abs(literal)}")
+                    return abs(literal)
     return None
 
 
-def DPLL(pa, clauses, assigned_lit, VSIDS):
-    "DPLL is used recursively, making use of backtracking to explore whole search space"
-    global solution
+def remove_tautologies(clauses, verbose):
+    new_clauses = []
+    for clause in clauses:
+        if any(-lit in clause for lit in clause):
+            if verbose:
+                print(f"Removing tautological clause: {clause}")
+            continue  # Skip tautological clause
+        new_clauses.append(clause)
+    return new_clauses
 
-    updated_clauses = remove_literal(clauses, assigned_lit)
+
+def update_activity_scores(conflicting_clause, verbose):
+    """
+    Increment the activity scores of variables in the conflicting clause
+    and apply decay to all scores.
+    """
+    global activity_scores
+    for variable in conflicting_clause:
+        activity_scores[abs(variable)] = activity_scores.get(abs(variable), 0) + 1
+
+    # Apply decay to all activity scores
+    for var in activity_scores:
+        activity_scores[var] *= decay_factor
+
+    if verbose:
+        print(f"Updated Activity Scores (with decay): {activity_scores}")
+
+
+def DPLL(pa, clauses, assigned_lit, VSIDS, verbose):
+    global solution, conflicts
+
+    if assigned_lit is not None:
+        updated_clauses, conflicting_clauses = remove_literal(clauses, assigned_lit)
+        if verbose:
+            print(f"Assigned Literal: {assigned_lit}, Updated Clauses: {updated_clauses}")
+    else:
+        updated_clauses = clauses
+        conflicting_clauses = []
 
     # Check satisfiability
-    if len(updated_clauses) == 0: # Satisfiable (sudoku is done)
+    if len(updated_clauses) == 0:  # Satisfiable
         solution = pa.copy()
+        if verbose:
+            print("Solution found!")
         return True
-    if any(len(clause) == 0 for clause in updated_clauses): # Unsatisfiable
-        global conflicts
+    if conflicting_clauses:  # Unsatisfiable
         conflicts += 1
+        if verbose:
+            print(f"Conflict encountered! Total conflicts: {conflicts}")
+        if VSIDS:
+            for conflict_clause in conflicting_clauses:
+                update_activity_scores(conflict_clause, verbose)
         return False
 
     # Perform simplification rules
-    unit_literal = simplify(pa, updated_clauses)
+    unit_literal = simplify(pa, updated_clauses, verbose)
     if unit_literal:
-        pa[abs(unit_literal)] = True if unit_literal > 0 else False
-        return DPLL(pa, updated_clauses, unit_literal, VSIDS)
+        pa[abs(unit_literal)] = unit_literal > 0
+        if verbose:
+            print(f"Simplification found unit literal: {unit_literal}")
+        return DPLL(pa.copy(), updated_clauses, unit_literal, VSIDS, verbose)
 
     # Select a new literal to recurse/backtrack with
-    new_literal = pick_new_literal(pa, updated_clauses)
+    new_literal = pick_new_literal(pa, updated_clauses, VSIDS, verbose)
+    if new_literal is None:
+        if verbose:
+            print("No new literal to select. Returning False.")
+        return False
 
-    pa[new_literal] = False # For now assign false
-    if (DPLL(pa, updated_clauses, -new_literal, VSIDS)):
+    # Try False assignment first
+    pa[new_literal] = False
+    if verbose:
+        print(f"Trying literal {new_literal} as False.")
+    if DPLL(pa.copy(), updated_clauses, -new_literal, VSIDS, verbose):
         return True
 
-    pa[new_literal] = True # False didn't work so backtrack for true
-    return DPLL(pa, updated_clauses, new_literal, VSIDS)
+    # Backtrack and try True assignment
+    pa[new_literal] = True
+    if verbose:
+        print(f"Backtracking and trying literal {new_literal} as True.")
+    return DPLL(pa.copy(), updated_clauses, new_literal, VSIDS, verbose)
 
 
-def run_DPLL(filename, VSIDS):
+def run_DPLL(filename, VSIDS, verbose=False):
+    """
+    Run the DPLL algorithm with or without VSIDS on the given DIMACS file.
+    """
+    global activity_scores, conflicts, solution
+    activity_scores = {}  # Reset activity scores
+    conflicts = 0         # Reset conflict counter
+    solution = {}         # Reset solution
+
     clauses = parse_dimacs(filename)
 
+    if verbose:
+        print(f"Number of clauses before removing tautologies: {len(clauses)}")
+    clauses = remove_tautologies(clauses, verbose)
+    if verbose:
+        print(f"Number of clauses after removing tautologies: {len(clauses)}")
+
     start_time = time.time()
-    # Tautology rule
-    for clause in clauses:
-        for variable in clause:
-            if -variable in clause:
-                clause.remove(variable)
-                # If the tautology is the only left in the clause, just remove one, so the unit clause rule will handle the rest
-                if len(clause) > 1: # else just remove both
-                    clause.remove(-variable)
 
+    # Tautology rule (not needed as we have remove_tautologies)
+    # Initialize partial assignment and activity scores
     pa = {}
-    # Select a new literal to recurse/backtrack with
     available_literals = list({abs(lit) for clause in clauses for lit in clause})
-    new_literal = list(available_literals)[0]
+    for lit in available_literals:
+        activity_scores[lit] = 0  # Initialize activity scores
 
-    pa[new_literal] = False  # Assign False initially
-    satisfiability = DPLL(pa, clauses, -new_literal, VSIDS)
-    if not satisfiability:
-        pa[new_literal] = True
-        satisfiability = DPLL(pa, clauses, new_literal, VSIDS)
+    # Start DPLL algorithm
+    satisfiability = DPLL(pa, clauses, None, VSIDS, verbose)
 
     end_time = time.time()
     runtime = end_time - start_time
 
-    if satisfiability:
-        print("DPLL Solution found:", filename)
-    else:
-        print("Did not find a solution")
-        return
 
+    if satisfiability:
+        if VSIDS:
+            print(f"DPLL with VSIDS has found a solution to: {filename}")
+        else:
+            print(f"DPLL without VSIDS has found a solution to: {filename}")
+    else:
+        if VSIDS:
+            print(f"DPLL with VSIDS could not find a solution for: {filename}")
+        else:
+            print(f"DPLL without VSIDS could not find a solution for: {filename}")
+
+    # Optionally write solution to file
     base_filename, _ = os.path.splitext(filename)
-    filename = base_filename + '.out'
-    with open(filename, "w") as f: # Write the DIMACS output to file
+    output_filename = base_filename + '.out'
+    with open(output_filename, "w") as f:
         for literal, value in solution.items():
             dimacs_literal = str(literal) if value else f"-{literal}"
             f.write(dimacs_literal + " 0\n")
 
-    global conflicts
     return runtime, conflicts
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
+        if not os.path.exists(sys.argv[1]):
+            print("File not found. Please ensure the file exists at the specified path.")
+            exit()
+
         runtime, conflicts = run_DPLL(sys.argv[1], False)
 
         print("Runtime:", runtime)
         print("Conflicts:", conflicts)
-
-        ### Sudoku representation
-        max_value = max(abs(literal) for literal in solution.keys())
-        # Assuming literals are in the form XYZ, extract the largest component and derive n
-        n = max((max_value // 100), (max_value % 100) // 10, max_value % 10)
-
-        sudoku_grid = [['.' for _ in range(n)] for _ in range(n)]
-
-        # Populate the Sudoku grid with positive literals
-        for literal, value in solution.items():
-            if value:  # Only consider positive literals (True values)
-                # Parse row, column, and digit from the literal key
-                row = (literal // 100) - 1
-                col = ((literal % 100) // 10) - 1
-                digit = (literal % 10)
-
-                # Place the digit in the corresponding Sudoku cell
-                sudoku_grid[row][col] = str(digit)
-
-        # Print the Sudoku grid
-        print("Sudoku Grid Representation:")
-        for row in sudoku_grid:
-            print(" ".join(row))
     else:
         print("Add a filename")
-
-
-
-
-
-
-
-
