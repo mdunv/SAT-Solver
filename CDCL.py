@@ -251,7 +251,6 @@ def run_CDCL(filename, VSIDS, verbose=False):
 
     return pa, runtime, conflicts
 
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         solution, runtime, conflicts = run_CDCL(sys.argv[1], False)
